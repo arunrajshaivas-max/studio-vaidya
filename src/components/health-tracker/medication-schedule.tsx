@@ -1,19 +1,43 @@
+
 "use client"
 
+import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { format, parse } from 'date-fns';
 
-const medicationSchedule = [
-  { id: 1, name: 'Lisinopril', dosage: '10mg', time: '8:00 AM', taken: true, type: 'Morning' },
-  { id: 2, name: 'Metformin', dosage: '500mg', time: '8:00 AM', taken: true, type: 'Morning' },
-  { id: 3, name: 'Simvastatin', dosage: '20mg', time: '8:00 PM', taken: false, type: 'Evening' },
-  { id: 4, name: 'Aspirin', dosage: '81mg', time: '8:00 AM', taken: false, type: 'Morning' },
-  { id: 5, name: 'Paracetamol', dosage: '1 tablet', time: '2:00 PM', taken: false, type: 'Afternoon' },
-];
+export type Medication = {
+    id: number;
+    name: string;
+    dosage: string;
+    time: string;
+    taken: boolean;
+    type: 'Morning' | 'Afternoon' | 'Evening' | 'Night';
+};
 
-export function MedicationSchedule() {
+type MedicationScheduleProps = {
+    medications: Medication[];
+    setMedications: React.Dispatch<React.SetStateAction<Medication[]>>;
+};
+
+export function MedicationSchedule({ medications, setMedications }: MedicationScheduleProps) {
+
+    const handleTakenChange = (id: number, taken: boolean) => {
+        setMedications(meds => meds.map(med => med.id === id ? { ...med, taken } : med));
+    };
+
+    const formatTime = (timeString: string) => {
+        try {
+            const time = parse(timeString, 'HH:mm', new Date());
+            return format(time, 'h:mm a');
+        } catch(e) {
+            return timeString;
+        }
+    }
+
+
     return (
         <Card>
             <CardHeader>
@@ -31,15 +55,19 @@ export function MedicationSchedule() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {medicationSchedule.map(med => (
+                        {medications.map(med => (
                             <TableRow key={med.id} data-state={med.taken ? "selected" : ""}>
                                 <TableCell>
-                                    <Checkbox checked={med.taken} aria-label={`Mark ${med.name} as taken`} />
+                                    <Checkbox
+                                        checked={med.taken}
+                                        onCheckedChange={(checked) => handleTakenChange(med.id, !!checked)}
+                                        aria-label={`Mark ${med.name} as taken`}
+                                    />
                                 </TableCell>
                                 <TableCell className="font-medium">{med.name}</TableCell>
                                 <TableCell>{med.dosage}</TableCell>
                                 <TableCell className="flex items-center gap-2">
-                                    {med.time}
+                                    {formatTime(med.time)}
                                     <Badge variant={med.type === 'Morning' ? 'default' : 'secondary'} className="hidden sm:inline-flex">{med.type}</Badge>
                                 </TableCell>
                             </TableRow>
