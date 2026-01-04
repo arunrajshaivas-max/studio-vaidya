@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -32,7 +32,9 @@ import {
 } from '@/components/ui/form';
 import { getSymptomAdvice, textToSpeech } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
-import { Bot, Loader2, Volume2, AlertTriangle } from 'lucide-react';
+import { Bot, Loader2, Volume2, AlertTriangle, Pause, Play } from 'lucide-react';
+import { useLanguage } from '@/context/language-context';
+import { translations } from '@/lib/i18n';
 
 const formSchema = z.object({
   symptoms: z.string().min(10, 'Please describe your symptoms in more detail (at least 10 characters).'),
@@ -44,8 +46,12 @@ type FormValues = z.infer<typeof formSchema>;
 export function TextAnalysisForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
+  const { language } = useLanguage();
+  const t = translations[language].symptomChecker.text;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -55,9 +61,22 @@ export function TextAnalysisForm() {
     },
   });
 
+  useEffect(() => {
+    // Cleanup audio on component unmount
+    return () => {
+      audioRef.current?.pause();
+      audioRef.current = null;
+    };
+  }, []);
+
   async function onSubmit(values: FormValues) {
     setIsLoading(true);
     setResult(null);
+    if (audioRef.current) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+        audioRef.current = null;
+    }
     const response = await getSymptomAdvice(values);
     setIsLoading(false);
 
@@ -73,6 +92,17 @@ export function TextAnalysisForm() {
   }
 
   async function handleTextToSpeech() {
+    if (audioRef.current && !audioRef.current.paused) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+        return;
+    }
+    if (audioRef.current && audioRef.current.paused) {
+        audioRef.current.play();
+        setIsPlaying(true);
+        return;
+    }
+
     if (!result) return;
     setIsSynthesizing(true);
     const response = await textToSpeech(result);
@@ -80,7 +110,13 @@ export function TextAnalysisForm() {
 
     if (response.success && response.data) {
       const audio = new Audio(response.data);
+      audioRef.current = audio;
       audio.play();
+      setIsPlaying(true);
+      audio.onended = () => {
+        setIsPlaying(false);
+        audioRef.current = null;
+      };
     } else {
         toast({
             variant: "destructive",
@@ -95,10 +131,8 @@ export function TextAnalysisForm() {
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
           <CardHeader>
-            <CardTitle>Describe Your Symptoms</CardTitle>
-            <CardDescription>
-              Select your language and describe your symptoms. Our AI will provide preliminary advice.
-            </CardDescription>
+            <CardTitle>{t.title}</CardTitle>
+            <CardDescription>{t.description}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <FormField
@@ -106,11 +140,11 @@ export function TextAnalysisForm() {
               name="language"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Language</FormLabel>
+                  <FormLabel>{t.languageLabel}</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a language" />
+                        <SelectValue placeholder={t.languagePlaceholder} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -129,10 +163,10 @@ export function TextAnalysisForm() {
               name="symptoms"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Symptoms</FormLabel>
+                  <FormLabel>{t.symptomsLabel}</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="e.g., I have a headache and a slight fever..."
+                      placeholder={t.symptomsPlaceholder}
                       rows={5}
                       {...field}
                     />
@@ -147,10 +181,10 @@ export function TextAnalysisForm() {
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Analyzing...
+                  {t.analyzingButton}
                 </>
               ) : (
-                'Get AI Advice'
+                t.getAdviceButton
               )}
             </Button>
           </CardFooter>
@@ -162,22 +196,24 @@ export function TextAnalysisForm() {
             <div className="flex justify-between items-center mb-2">
                 <h3 className="flex items-center gap-2 font-semibold">
                 <Bot className="h-5 w-5 text-primary" />
-                AI Health Assistant's Advice
+                {t.resultTitle}
                 </h3>
                 <Button onClick={handleTextToSpeech} disabled={isSynthesizing} size="sm" variant="outline">
                     {isSynthesizing ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : isPlaying ? (
+                        <Pause className="mr-2 h-4 w-4" />
                     ) : (
-                        <Volume2 className="mr-2 h-4 w-4" />
+                       <Volume2 className="mr-2 h-4 w-4" />
                     )}
-                    Read Aloud
+                    {isPlaying ? t.pauseButton : t.readAloudButton}
                 </Button>
             </div>
             <p className="text-sm text-foreground">{result}</p>
             <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
                 <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5" />
                 <p className="text-xs">
-                    <strong>Disclaimer:</strong> This is a preliminary analysis by an AI and is not a substitute for professional medical advice. Please consult a qualified healthcare provider for an accurate diagnosis and treatment.
+                    <strong>{t.disclaimer.title}:</strong> {t.disclaimer.text}
                 </p>
             </div>
           </div>

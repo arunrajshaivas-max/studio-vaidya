@@ -30,6 +30,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Bot, Loader2, Upload, AlertTriangle } from 'lucide-react';
 import type { ImageBasedDiagnosisOutput } from '@/ai/flows/image-based-diagnosis';
 import { useLanguage } from '@/context/language-context';
+import { translations } from '@/lib/i18n';
 
 const formSchema = z.object({
   photo: z.any().refine(
@@ -48,6 +49,8 @@ export function ImageAnalysisForm() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { language } = useLanguage();
+  const t = translations[language].symptomChecker.image;
+
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -101,17 +104,15 @@ export function ImageAnalysisForm() {
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
           <CardHeader>
-            <CardTitle>Analyze an Image</CardTitle>
-            <CardDescription>
-              Upload a photo of a visible symptom (e.g., skin rash, wound) for a preliminary AI diagnosis.
-            </CardDescription>
+            <CardTitle>{t.title}</CardTitle>
+            <CardDescription>{t.description}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
              <div className="p-4 border-2 border-dashed rounded-lg text-center cursor-pointer hover:border-primary"
               onClick={() => fileInputRef.current?.click()}
              >
                 <Upload className="mx-auto h-12 w-12 text-muted-foreground" />
-                <p className="mt-2 text-sm text-muted-foreground">Click or drag to upload an image</p>
+                <p className="mt-2 text-sm text-muted-foreground">{t.uploadArea}</p>
                 <FormField
                   control={form.control}
                   name="photo"
@@ -146,10 +147,10 @@ export function ImageAnalysisForm() {
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Optional Description</FormLabel>
+                  <FormLabel>{t.optionalDescriptionLabel}</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="e.g., This rash appeared 2 days ago and is itchy."
+                      placeholder={t.optionalDescriptionPlaceholder}
                       rows={3}
                       {...field}
                     />
@@ -164,10 +165,10 @@ export function ImageAnalysisForm() {
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Analyzing...
+                  {t.analyzingButton}
                 </>
               ) : (
-                'Analyze Image'
+                t.analyzeButton
               )}
             </Button>
           </CardFooter>
@@ -178,17 +179,17 @@ export function ImageAnalysisForm() {
           <div className="mt-4 rounded-lg border bg-secondary/50 p-4 space-y-4">
             <h3 className="flex items-center gap-2 font-semibold">
               <Bot className="h-5 w-5 text-primary" />
-              AI Analysis Result
+              {t.resultTitle}
             </h3>
             <div className="grid gap-2 text-sm">
-                <p><strong>Preliminary Diagnosis:</strong> {result.diagnosis}</p>
-                <p><strong>Assessed Severity:</strong> {result.severity}</p>
-                <p><strong>Recommendation:</strong> {result.recommendation}</p>
+                <p><strong>{t.preliminaryDiagnosisLabel}:</strong> {result.diagnosis}</p>
+                <p><strong>{t.assessedSeverityLabel}:</strong> {result.severity}</p>
+                <p><strong>{t.recommendationLabel}:</strong> {result.recommendation}</p>
             </div>
             <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
                 <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5" />
                 <p className="text-xs">
-                    <strong>Disclaimer:</strong> This is a preliminary analysis by an AI and is not a substitute for professional medical advice. Please consult a qualified healthcare provider for an accurate diagnosis and treatment.
+                    <strong>{t.disclaimer.title}:</strong> {t.disclaimer.text}
                 </p>
             </div>
           </div>

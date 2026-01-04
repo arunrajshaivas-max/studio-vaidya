@@ -31,8 +31,10 @@ import {
 } from '@/components/ui/form';
 import { analyzeVoiceSymptoms, textToSpeech } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
-import { Bot, Loader2, Mic, Square, Volume2, AlertTriangle } from 'lucide-react';
+import { Bot, Loader2, Mic, Square, Volume2, AlertTriangle, Pause } from 'lucide-react';
 import type { VoiceSymptomsOutput } from '@/ai/flows/voice-based-symptom-analysis';
+import { useLanguage } from '@/context/language-context';
+import { translations } from '@/lib/i18n';
 
 const formSchema = z.object({
   language: z.string(),
@@ -44,11 +46,16 @@ export function VoiceAnalysisForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
+  const [isPlaying, setIsPlaying] = useState<string | null>(null);
   const [result, setResult] = useState<VoiceSymptomsOutput | null>(null);
   const [audioDataUri, setAudioDataUri] = useState<string | null>(null);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const { language } = useLanguage();
+  const t = translations[language].symptomChecker.voice;
+
 
   const { toast } = useToast();
 
@@ -103,6 +110,14 @@ export function VoiceAnalysisForm() {
     }
   }, [audioDataUri, form]);
 
+  useEffect(() => {
+    // Cleanup audio on component unmount
+    return () => {
+      audioRef.current?.pause();
+      audioRef.current = null;
+    };
+  }, []);
+
 
   async function onSubmit(values: FormValues) {
     if (!audioDataUri) {
@@ -116,6 +131,11 @@ export function VoiceAnalysisForm() {
 
     setIsLoading(true);
     setResult(null);
+     if (audioRef.current) {
+        audioRef.current.pause();
+        setIsPlaying(null);
+        audioRef.current = null;
+    }
 
     const response = await analyzeVoiceSymptoms({
       voiceDataUri: audioDataUri,
@@ -136,7 +156,22 @@ export function VoiceAnalysisForm() {
     }
   }
 
-  async function handleTextToSpeech(text: string) {
+  async function handleTextToSpeech(text: string, part: 'causes' | 'steps') {
+    if (audioRef.current && !audioRef.current.paused && isPlaying === part) {
+      audioRef.current.pause();
+      setIsPlaying(null);
+      return;
+    }
+    if (audioRef.current && audioRef.current.paused && isPlaying === part) {
+      audioRef.current.play();
+      return;
+    }
+    // If another part is playing, stop it
+     if (audioRef.current) {
+        audioRef.current.pause();
+    }
+
+
     if (!text) return;
     setIsSynthesizing(true);
     const response = await textToSpeech(text);
@@ -144,7 +179,15 @@ export function VoiceAnalysisForm() {
 
     if (response.success && response.data) {
       const audio = new Audio(response.data);
+      audioRef.current = audio;
       audio.play();
+      setIsPlaying(part);
+      audio.onplay = () => setIsPlaying(part);
+      audio.onpause = () => setIsPlaying(null);
+      audio.onended = () => {
+        setIsPlaying(null);
+        audioRef.current = null;
+      };
     } else {
         toast({
             variant: "destructive",
@@ -159,10 +202,8 @@ export function VoiceAnalysisForm() {
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
           <CardHeader>
-            <CardTitle>Analyze Symptoms via Voice</CardTitle>
-            <CardDescription>
-              Record yourself describing your symptoms. Our AI will analyze the audio.
-            </CardDescription>
+            <CardTitle>{t.title}</CardTitle>
+            <CardDescription>{t.description}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <FormField
@@ -170,11 +211,11 @@ export function VoiceAnalysisForm() {
               name="language"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Language</FormLabel>
+                  <FormLabel>{t.languageLabel}</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isRecording || isLoading}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a language" />
+                        <SelectValue placeholder={t.languagePlaceholder} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -200,7 +241,7 @@ export function VoiceAnalysisForm() {
               </Button>
             </div>
              <p className="text-center text-muted-foreground">
-                {isLoading ? 'Analyzing...' : isRecording ? 'Recording... Click to stop.' : 'Click to start recording.'}
+                {isLoading ? t.analyzing : isRecording ? t.recording : t.startRecording}
             </p>
           </CardContent>
         </form>
@@ -210,20 +251,20 @@ export function VoiceAnalysisForm() {
           <div className="mt-4 rounded-lg border bg-secondary/50 p-4 space-y-4">
             <h3 className="flex items-center gap-2 font-semibold">
               <Bot className="h-5 w-5 text-primary" />
-              AI Analysis Result
+              {t.resultTitle}
             </h3>
             <div className="grid gap-2 text-sm">
                 <div className="flex items-center justify-between">
-                    <strong>Possible Causes:</strong>
-                    <Button onClick={() => handleTextToSpeech(`Possible Causes: ${result.possibleCauses}`)} disabled={isSynthesizing} size="sm" variant="ghost">
-                        <Volume2 className="h-4 w-4" />
+                    <strong>{t.possibleCausesLabel}:</strong>
+                    <Button onClick={() => handleTextToSpeech(`Possible Causes: ${result.possibleCauses}`, 'causes')} disabled={isSynthesizing} size="sm" variant="ghost">
+                        {isSynthesizing && isPlaying !== 'causes' ? <Loader2 className="h-4 w-4 animate-spin"/> : isPlaying === 'causes' ? <Pause className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
                     </Button>
                 </div>
                 <p>{result.possibleCauses}</p>
                 <div className="flex items-center justify-between mt-2">
-                    <strong>Suggested Next Steps:</strong>
-                     <Button onClick={() => handleTextToSpeech(`Suggested Next Steps: ${result.suggestedNextSteps}`)} disabled={isSynthesizing} size="sm" variant="ghost">
-                        <Volume2 className="h-4 w-4" />
+                    <strong>{t.suggestedNextStepsLabel}:</strong>
+                     <Button onClick={() => handleTextToSpeech(`Suggested Next Steps: ${result.suggestedNextSteps}`, 'steps')} disabled={isSynthesizing} size="sm" variant="ghost">
+                        {isSynthesizing && isPlaying !== 'steps' ? <Loader2 className="h-4 w-4 animate-spin"/> : isPlaying === 'steps' ? <Pause className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
                     </Button>
                 </div>
                 <p>{result.suggestedNextSteps}</p>
@@ -231,7 +272,7 @@ export function VoiceAnalysisForm() {
             <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
                 <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5" />
                 <p className="text-xs">
-                    <strong>Disclaimer:</strong> This is a preliminary analysis by an AI and is not a substitute for professional medical advice. Please consult a qualified healthcare provider for an accurate diagnosis and treatment.
+                    <strong>{t.disclaimer.title}:</strong> {t.disclaimer.text}
                 </p>
             </div>
           </div>
