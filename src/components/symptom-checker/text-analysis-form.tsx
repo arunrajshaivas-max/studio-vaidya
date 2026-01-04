@@ -29,9 +29,9 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { getSymptomAdvice } from '@/lib/actions';
+import { getSymptomAdvice, textToSpeech } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
-import { Bot, Loader2 } from 'lucide-react';
+import { Bot, Loader2, Volume2 } from 'lucide-react';
 
 const formSchema = z.object({
   symptoms: z.string().min(10, 'Please describe your symptoms in more detail (at least 10 characters).'),
@@ -42,6 +42,7 @@ type FormValues = z.infer<typeof formSchema>;
 
 export function TextAnalysisForm() {
   const [isLoading, setIsLoading] = useState(false);
+  const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -67,6 +68,24 @@ export function TextAnalysisForm() {
         title: 'Analysis Failed',
         description: response.error || 'Could not get health advice. Please try again.',
       });
+    }
+  }
+
+  async function handleTextToSpeech() {
+    if (!result) return;
+    setIsSynthesizing(true);
+    const response = await textToSpeech(result);
+    setIsSynthesizing(false);
+
+    if (response.success && response.data) {
+      const audio = new Audio(response.data);
+      audio.play();
+    } else {
+        toast({
+            variant: "destructive",
+            title: "Audio Failed",
+            description: response.error || "Could not play audio. Please try again.",
+        });
     }
   }
 
@@ -139,10 +158,20 @@ export function TextAnalysisForm() {
       {result && (
         <CardContent>
           <div className="mt-4 rounded-lg border bg-secondary/50 p-4">
-            <h3 className="flex items-center gap-2 font-semibold mb-2">
-              <Bot className="h-5 w-5 text-primary" />
-              AI Health Assistant's Advice
-            </h3>
+            <div className="flex justify-between items-center mb-2">
+                <h3 className="flex items-center gap-2 font-semibold">
+                <Bot className="h-5 w-5 text-primary" />
+                AI Health Assistant's Advice
+                </h3>
+                <Button onClick={handleTextToSpeech} disabled={isSynthesizing} size="sm" variant="outline">
+                    {isSynthesizing ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                        <Volume2 className="mr-2 h-4 w-4" />
+                    )}
+                    Read Aloud
+                </Button>
+            </div>
             <p className="text-sm text-foreground">{result}</p>
           </div>
         </CardContent>

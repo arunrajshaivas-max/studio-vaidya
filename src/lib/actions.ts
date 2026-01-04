@@ -3,6 +3,8 @@
 
 import { getHealthAdvice, type GetHealthAdviceInput } from '@/ai/flows/multilingual-health-advice';
 import { imageBasedDiagnosis, type ImageBasedDiagnosisInput } from '@/ai/flows/image-based-diagnosis';
+import { analyzeVoiceSymptoms, type VoiceSymptomsInput } from '@/ai/flows/voice-based-symptom-analysis';
+import { textToSpeech as textToSpeechFlow } from '@/ai/flows/text-to-speech';
 import { z } from 'zod';
 import { ZodError } from 'zod';
 
@@ -15,6 +17,13 @@ const ImageBasedDiagnosisInputSchema = z.object({
     photoDataUri: z.string().min(1, "Please upload an image."),
     description: z.string().optional(),
 });
+
+const VoiceSymptomInputSchema = z.object({
+    voiceDataUri: z.string().min(1, "Please record your audio."),
+    language: z.string(),
+});
+
+const TextToSpeechInputSchema = z.string().min(1, "No text provided for speech synthesis.");
 
 
 export async function getSymptomAdvice(input: GetHealthAdviceInput) {
@@ -43,4 +52,32 @@ export async function getImageDiagnosis(input: ImageBasedDiagnosisInput) {
     console.error(error);
     return { success: false, error: 'An unexpected error occurred while analyzing the image.' };
   }
+}
+
+export async function analyzeVoiceSymptoms(input: VoiceSymptomsInput) {
+    try {
+      VoiceSymptomInputSchema.parse(input);
+      const result = await analyzeVoiceSymptoms(input);
+      return { success: true, data: result };
+    } catch (error) {
+      if (error instanceof ZodError) {
+          return { success: false, error: error.errors.map(e => e.message).join(', ') };
+      }
+      console.error(error);
+      return { success: false, error: 'An unexpected error occurred while analyzing the voice input.' };
+    }
+}
+
+export async function textToSpeech(text: string) {
+    try {
+        TextToSpeechInputSchema.parse(text);
+        const result = await textToSpeechFlow(text);
+        return { success: true, data: result.media };
+    } catch (error) {
+        if (error instanceof ZodError) {
+            return { success: false, error: error.errors.map(e => e.message).join(', ') };
+        }
+        console.error(error);
+        return { success: false, error: 'An unexpected error occurred during text-to-speech conversion.' };
+    }
 }
